@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<BorderPane xmlns="http://javafx.com/javafx/17"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="facetrace.controller.SearchController"
+            stylesheets="@search.css">
+    <top>
+        <HBox spacing="12" styleClass="header">
+            <Label text="FaceTrace - User Search" styleClass="header-title" />
+            <Region HBox.hgrow="ALWAYS" />
+            <Button fx:id="adminLoginButton" text="Admin sign-in" onAction="#openAdminLogin" styleClass="secondary-button" />
+        </HBox>
+    </top>
+    <center>
+        <VBox spacing="14" styleClass="page-content">
+            <Label text="Search a permitted photo against the saved demo gallery. Scores are not proof of identity."
+                   styleClass="intro" wrapText="true" />
+            <HBox spacing="10" styleClass="controls">
+                <Button fx:id="choosePhotoButton" text="Choose photo" onAction="#choosePhoto" />
+                <Label fx:id="selectedFileLabel" text="No image selected" styleClass="selected-file" />
+                <Region HBox.hgrow="ALWAYS" />
+                <Label text="Threshold" styleClass="field-label" />
+                <TextField fx:id="thresholdField" text="0.0" prefWidth="80" />
+                <Button fx:id="searchButton" text="Search" onAction="#search" />
+            </HBox>
+            <HBox spacing="16" styleClass="main-content" VBox.vgrow="ALWAYS">
+                <VBox spacing="8" styleClass="content-section" prefWidth="470">
+                    <Label text="Selected photo with detected face boxes" styleClass="section-title" />
+                    <StackPane prefWidth="440" prefHeight="330" styleClass="preview-frame">
+                        <ImageView fx:id="previewImageView" fitWidth="440" fitHeight="330"
+                                   preserveRatio="true" smooth="true" />
+                    </StackPane>
+                </VBox>
+                <VBox spacing="8" styleClass="content-section" HBox.hgrow="ALWAYS">
+                    <Label text="Top three matches" styleClass="section-title" />
+                    <TableView fx:id="resultsTable" VBox.vgrow="ALWAYS">
+                        <columns>
+                            <TableColumn fx:id="nameColumn" text="Name" prefWidth="150" sortable="false" />
+                            <TableColumn fx:id="caseColumn" text="Case code" prefWidth="145" sortable="false" />
+                            <TableColumn fx:id="scoreColumn" text="Cosine score" prefWidth="115" sortable="false" />
+                        </columns>
+                    </TableView>
+                    <Label fx:id="statusLabel" text="Choose a local image to begin."
+                           wrapText="true" styleClass="status" />
+                </VBox>
+            </HBox>
+        </VBox>
+    </center>
+</BorderPane>
