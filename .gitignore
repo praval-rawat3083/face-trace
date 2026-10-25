@@ -1,0 +1,32 @@
+# Maven output is recreated each time the project builds.
+target/
+
+# IDE files belong to each person's computer.
+.idea/
+.vscode/
+*.iml
+config/database.properties
+
+# Do not keep uploaded or personal image data in the project.
+uploads/
+data/
+# Keep the downloaded real-person dataset and its archive out of Git.
+/att_faces/
+/att_faces.zip
+/att_faces.tar.Z
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.pgm
+
+# These two generated synthetic test pictures are safe to keep with the tests.
+!src/test/resources/
+!src/test/resources/facetrace/
+!src/test/resources/facetrace/synthetic-single.jpg
+!src/test/resources/facetrace/synthetic-pair.jpg
+
+# Java crash logs and local operating-system clutter.
+hs_err_pid*.log
+.DS_Store
+Thumbs.db
