@@ -33,6 +33,7 @@ public final class Benchmark {
             System.out.println("Usage: Benchmark <dataset-folder> <threshold-0-to-1> [results.txt]");
             return;
         }
+        nu.pattern.OpenCV.loadLocally();
         Path datasetRoot = Path.of(args[0]).toAbsolutePath().normalize();
         double threshold = Double.parseDouble(args[1]);
         FaceMatcher matcher = new FaceMatcher(threshold);
@@ -111,14 +112,33 @@ public final class Benchmark {
                 if (imageNumber(imagePath) != imageIndex + 1) {
                     throw new IOException(folder + " must contain images 1.pgm through 10.pgm");
                 }
-                BufferedImage image = Phase2Demo.readPgm(imagePath);
+                BufferedImage image = readPgm(imagePath);
                 images.add(image);
                 vectors.add(embedder.embed(image));
             }
-            String label = String.format(Locale.ROOT, "Subject-%03d", number);
+            String label = String.format(Locale.ROOT, "STU-%03d", number);
             subjects.add(new Subject(label, List.copyOf(images), List.copyOf(vectors)));
         }
         return List.copyOf(subjects);
+    }
+
+    public static BufferedImage readPgm(Path imagePath) throws IOException {
+        org.opencv.core.Mat gray = org.opencv.imgcodecs.Imgcodecs.imread(imagePath.toAbsolutePath().toString(), org.opencv.imgcodecs.Imgcodecs.IMREAD_GRAYSCALE);
+        try {
+            if (gray.empty()) {
+                throw new IOException("Cannot read image: " + imagePath);
+            }
+            int cols = gray.cols();
+            int rows = gray.rows();
+            byte[] pixels = new byte[(int) gray.total()];
+            gray.get(0, 0, pixels);
+            BufferedImage image = new BufferedImage(cols, rows, BufferedImage.TYPE_BYTE_GRAY);
+            byte[] target = ((java.awt.image.DataBufferByte) image.getRaster().getDataBuffer()).getData();
+            System.arraycopy(pixels, 0, target, 0, pixels.length);
+            return image;
+        } finally {
+            gray.release();
+        }
     }
 
     /** Lists numbered PGM files in numeric order rather than alphabetic order. */

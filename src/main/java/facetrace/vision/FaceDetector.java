@@ -39,6 +39,10 @@ public final class FaceDetector {
         }
     }
 
+    public CascadeClassifier getClassifier() {
+        return classifier;
+    }
+
     /** Reads one image, reports zero/one/many faces, and crops the largest detected face. */
     public DetectionResult detect(Path imagePath) {
         Mat original = Imgcodecs.imread(imagePath.toAbsolutePath().toString());

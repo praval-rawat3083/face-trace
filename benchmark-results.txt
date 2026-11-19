@@ -1,0 +1,16 @@
+FaceTrace Step 6 - ORL leave-one-out benchmark
+Subjects: 40
+Images per subject: 10
+Folds: 10 (each round holds out one image per subject)
+Training images per subject per fold: 9
+Searches completed: 400
+Similarity threshold: 0.0000
+Top-1 accuracy: 96.00% (384/400)
+Top-3 accuracy: 99.50% (398/400)
+Average search time: 2.2634 ms
+Timing includes probe LBP extraction and ranking; it excludes file loading and gallery preparation.
+Meaning: top-1 is correct when the right subject ranks first; top-3 is correct when it appears among the first three.
+A probe with no candidate above the threshold counts as incorrect.
+Weak points: this is a small, controlled grayscale dataset with only known subjects in the gallery.
+LBP is a simple texture method; pose, lighting, expression, and image alignment can change its scores.
+The result is a classroom benchmark, not proof of identity or performance on new people.

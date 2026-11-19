@@ -2,6 +2,8 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
@@ -14,58 +16,126 @@
             fx:controller="facetrace.controller.AdminController"
             stylesheets="@admin.css">
     <top>
-        <HBox spacing="12" styleClass="header">
-            <Label text="FaceTrace - Admin Records" styleClass="header-title" />
+        <HBox spacing="14" styleClass="header">
+            <VBox spacing="2">
+                <Label text="FaceTrace — Student Administration &amp; Analytics Portal" styleClass="header-title" />
+                <Label text="Manage biometric profiles, audit trails, and 75% attendance compliance" styleClass="header-subtitle" />
+            </VBox>
             <Region HBox.hgrow="ALWAYS" />
             <Label fx:id="signedInLabel" styleClass="header-user" />
         </HBox>
     </top>
     <center>
-        <VBox spacing="12" styleClass="page-content">
-            <HBox spacing="14" styleClass="main-content" VBox.vgrow="ALWAYS">
-                <VBox spacing="8" prefWidth="330" styleClass="content-section">
-                    <Label text="Synthetic demo record" styleClass="section-title" />
-                    <Label text="Case code (DEMO-###)" styleClass="field-label" />
-                    <TextField fx:id="caseCodeField" promptText="For example: DEMO-041" />
-                    <Label text="Subject name (Subject-###)" styleClass="field-label" />
-                    <TextField fx:id="fullNameField" promptText="For example: Subject-041" />
-                    <Label text="Synthetic age" styleClass="field-label" />
-                    <TextField fx:id="ageField" promptText="Age in years" />
-                    <Label text="Fictional case note" styleClass="field-label" />
-                    <TextField fx:id="offenceTypeField" promptText="Short fictional note" />
-                    <HBox spacing="8" styleClass="photo-row">
-                        <Button fx:id="choosePhotoButton" text="Choose photo" onAction="#choosePhoto" />
-                        <Label fx:id="photoPathLabel" text="No photo selected" wrapText="true" styleClass="photo-label" />
+        <TabPane fx:id="adminTabPane" tabClosingPolicy="UNAVAILABLE" styleClass="main-tab-pane">
+            <!-- TAB 1: STUDENT DIRECTORY & ENROLLMENT -->
+            <Tab text="👥 Student Profiles &amp; Enrollment">
+                <VBox spacing="14" styleClass="page-content">
+                    <HBox spacing="16" styleClass="main-content" VBox.vgrow="ALWAYS">
+                        <VBox spacing="10" prefWidth="380" minWidth="360" styleClass="content-section">
+                            <Label text="Student Enrollment Form" styleClass="section-title" />
+                            <Label text="Student ID / Roll No" styleClass="field-label" />
+                            <TextField fx:id="caseCodeField" promptText="e.g. STU-001 or 2026-CSE-01" />
+
+                            <Label text="Student Full Name" styleClass="field-label" />
+                            <TextField fx:id="fullNameField" promptText="e.g. Rahul Sharma" />
+
+                            <Label text="Age / Semester" styleClass="field-label" />
+                            <TextField fx:id="ageField" promptText="e.g. 20" />
+
+                            <Label text="Department / Branch (e.g. BCA - 3rd Sem)" styleClass="field-label" />
+                            <TextField fx:id="offenceTypeField" promptText="e.g. BCA - 3rd Semester" />
+
+                            <Label text="Biometric Profile Photo" styleClass="field-label" />
+                            <HBox spacing="10" alignment="CENTER_LEFT" styleClass="photo-picker-box">
+                                <Button fx:id="choosePhotoButton" text="📁 Select Photo" onAction="#choosePhoto" styleClass="photo-browse-button" />
+                                <Label fx:id="photoPathLabel" text="No photo selected" wrapText="true" HBox.hgrow="ALWAYS" styleClass="photo-label" />
+                            </HBox>
+
+                            <CheckBox fx:id="syntheticConfirmCheckBox"
+                                      text="I confirm this photo is provided with consent for biometric attendance enrollment."
+                                      wrapText="true" styleClass="consent-checkbox" />
+
+                            <VBox spacing="8" styleClass="form-action-group">
+                                <Button fx:id="addButton" text="➕ Enroll New Student" onAction="#addRecord"
+                                        maxWidth="Infinity" styleClass="primary-button" />
+                                <HBox spacing="8">
+                                    <Button fx:id="updateButton" text="✏ Update Branch" onAction="#updateRecord"
+                                            disable="true" HBox.hgrow="ALWAYS" maxWidth="Infinity" styleClass="accent-button" />
+                                    <Button fx:id="deleteButton" text="🗑 Delete" onAction="#deleteRecord"
+                                            disable="true" HBox.hgrow="ALWAYS" maxWidth="Infinity" styleClass="danger-button" />
+                                </HBox>
+                                <Button fx:id="clearButton" text="↺ Clear Form" onAction="#clearForm"
+                                        maxWidth="Infinity" styleClass="secondary-button" />
+                            </VBox>
+                            <Label fx:id="statusLabel" text="Enter details to enroll student." wrapText="true" styleClass="status-label" />
+                        </VBox>
+
+                        <VBox spacing="10" styleClass="content-section" HBox.hgrow="ALWAYS">
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Enrolled Students Directory" styleClass="section-title" />
+                                <Region HBox.hgrow="ALWAYS" />
+                                <Button fx:id="manualAttendanceButton" text="➕ Mark Attendance" onAction="#manualAttendanceEntry"
+                                        minWidth="-Infinity" styleClass="action-button" />
+                                <Button fx:id="exportCsvButton" text="📥 Export CSV" onAction="#exportAttendanceCsv"
+                                        minWidth="-Infinity" styleClass="primary-button" />
+                                <Button fx:id="refreshButton" text="⟳ Refresh" onAction="#refreshRecords"
+                                        minWidth="-Infinity" styleClass="secondary-button" />
+                            </HBox>
+                            <TableView fx:id="recordsTable" VBox.vgrow="ALWAYS" styleClass="records-table">
+                                <columns>
+                                    <TableColumn fx:id="caseColumn" text="Roll No / ID" prefWidth="130" sortable="false" />
+                                    <TableColumn fx:id="nameColumn" text="Student Name" prefWidth="160" sortable="false" />
+                                    <TableColumn fx:id="ageColumn" text="Age/Sem" prefWidth="70" sortable="false" />
+                                    <TableColumn fx:id="noteColumn" text="Department / Branch" prefWidth="180" sortable="false" />
+                                    <TableColumn fx:id="photoColumn" text="Photo Path" prefWidth="220" sortable="false" />
+                                </columns>
+                            </TableView>
+                        </VBox>
                     </HBox>
-                    <CheckBox fx:id="syntheticConfirmCheckBox"
-                              text="I confirm all details and the face photo are synthetic demo material."
-                              wrapText="true" />
-                    <HBox spacing="8">
-                        <Button fx:id="addButton" text="Add" onAction="#addRecord" />
-                        <Button fx:id="updateButton" text="Update selected" onAction="#updateRecord" disable="true" />
-                        <Button fx:id="deleteButton" text="Delete selected" onAction="#deleteRecord" disable="true" />
-                    </HBox>
-                    <Button fx:id="clearButton" text="Clear form" onAction="#clearForm" styleClass="secondary-button" />
                 </VBox>
-                <VBox spacing="8" styleClass="content-section" HBox.hgrow="ALWAYS">
-                    <HBox spacing="10">
-                        <Label text="Saved records" styleClass="section-title" />
-                        <Region HBox.hgrow="ALWAYS" />
-                        <Button fx:id="refreshButton" text="Refresh" onAction="#refreshRecords" styleClass="secondary-button" />
+            </Tab>
+
+            <!-- TAB 2: ANALYTICS & 75% DEFAULTERS -->
+            <Tab text="📊 Attendance Analytics &amp; Defaulters (&lt; 75%)">
+                <VBox spacing="14" styleClass="page-content">
+                    <HBox spacing="16" styleClass="kpi-container">
+                        <VBox spacing="4" styleClass="kpi-card" HBox.hgrow="ALWAYS">
+                            <Label text="Total Enrolled Students" styleClass="kpi-title" />
+                            <Label fx:id="kpiTotalStudentsLabel" text="--" styleClass="kpi-value" />
+                        </VBox>
+                        <VBox spacing="4" styleClass="kpi-card" HBox.hgrow="ALWAYS">
+                            <Label text="Total Attended Sessions" styleClass="kpi-title" />
+                            <Label fx:id="kpiTotalSessionsLabel" text="--" styleClass="kpi-value" />
+                        </VBox>
+                        <VBox spacing="4" styleClass="kpi-card-danger" HBox.hgrow="ALWAYS">
+                            <Label text="Defaulters (&lt; 75% Attendance)" styleClass="kpi-title-danger" />
+                            <Label fx:id="kpiDefaultersLabel" text="--" styleClass="kpi-value-danger" />
+                        </VBox>
                     </HBox>
-                    <TableView fx:id="recordsTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="caseColumn" text="Case code" prefWidth="125" sortable="false" />
-                            <TableColumn fx:id="nameColumn" text="Subject" prefWidth="130" sortable="false" />
-                            <TableColumn fx:id="ageColumn" text="Age" prefWidth="55" sortable="false" />
-                            <TableColumn fx:id="noteColumn" text="Fictional note" prefWidth="180" sortable="false" />
-                            <TableColumn fx:id="photoColumn" text="Photo file" prefWidth="125" sortable="false" />
-                        </columns>
-                    </TableView>
-                    <Label fx:id="statusLabel" text="Admin record actions are saved to audit_log."
-                           wrapText="true" styleClass="status" />
+
+                    <VBox spacing="10" styleClass="content-section" VBox.vgrow="ALWAYS">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Student Compliance &amp; Attendance Rate" styleClass="section-title" />
+                            <Region HBox.hgrow="ALWAYS" />
+                            <Button fx:id="filterDefaultersButton" text="⚠ Show Defaulters Only (&lt; 75%)" onAction="#toggleDefaulterFilter"
+                                    minWidth="-Infinity" styleClass="danger-button" />
+                            <Button fx:id="refreshAnalyticsButton" text="⟳ Refresh Analytics" onAction="#refreshAnalytics"
+                                    minWidth="-Infinity" styleClass="secondary-button" />
+                        </HBox>
+                        <TableView fx:id="analyticsTable" VBox.vgrow="ALWAYS" styleClass="records-table">
+                            <columns>
+                                <TableColumn fx:id="statStudentIdCol" text="Roll No / ID" prefWidth="130" sortable="true" />
+                                <TableColumn fx:id="statNameCol" text="Full Name" prefWidth="180" sortable="true" />
+                                <TableColumn fx:id="statDeptCol" text="Department" prefWidth="160" sortable="true" />
+                                <TableColumn fx:id="statPresentCol" text="Attended" prefWidth="85" sortable="true" />
+                                <TableColumn fx:id="statTotalCol" text="Total Sessions" prefWidth="105" sortable="true" />
+                                <TableColumn fx:id="statPercentageCol" text="Attendance %" prefWidth="110" sortable="true" />
+                                <TableColumn fx:id="statStatusCol" text="Status" prefWidth="140" sortable="true" />
+                            </columns>
+                        </TableView>
+                    </VBox>
                 </VBox>
-            </HBox>
-        </VBox>
+            </Tab>
+        </TabPane>
     </center>
 </BorderPane>
