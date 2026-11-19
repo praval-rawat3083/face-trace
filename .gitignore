@@ -1,5 +1,6 @@
 # Maven output is recreated each time the project builds.
 target/
+.work/
 
 # IDE files belong to each person's computer.
 .idea/

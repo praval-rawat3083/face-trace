@@ -14,33 +14,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Reads saved LBP vectors for search and records one measured search result. */
+/** Reads saved student LBP vectors for verification and logs daily attendance with subject. */
 public final class FaceSearchDao {
     private static final String EMBEDDER_NAME = "LBP-4x4-256-v1";
     private final Connection connection;
 
-    /** Uses the connection owned by the background search task. */
     public FaceSearchDao(Connection connection) {
         this.connection = Objects.requireNonNull(connection, "A database connection is required");
     }
 
-    /** Averages every stored photo vector for the same record. */
+    /** Loads and averages stored photo vectors for each enrolled student. */
     public List<GalleryEntry> loadGallery() throws SQLException, IOException {
-        String sql = "SELECT c.id, c.case_code, c.full_name, e.vector "
-                + "FROM criminal_records c JOIN face_embeddings e ON e.record_id = c.id "
-                + "WHERE e.embedder_name = ? ORDER BY c.case_code, e.id";
+        String sql = "SELECT s.id, s.student_id, s.full_name, e.vector "
+                + "FROM students s JOIN face_embeddings e ON e.record_id = s.id "
+                + "WHERE e.embedder_name = ? ORDER BY s.student_id, e.id";
+
         Map<String, VectorTotal> totals = new LinkedHashMap<>();
         try (PreparedStatement query = connection.prepareStatement(sql)) {
             query.setString(1, EMBEDDER_NAME);
             try (ResultSet rows = query.executeQuery()) {
                 while (rows.next()) {
-                    String caseCode = rows.getString("case_code");
+                    String studentId = rows.getString("student_id");
                     float[] vector = decodeVector(rows.getBytes("vector"));
-                    VectorTotal total = totals.get(caseCode);
+                    VectorTotal total = totals.get(studentId);
                     if (total == null) {
-                        total = new VectorTotal(rows.getLong("id"), caseCode,
+                        total = new VectorTotal(rows.getLong("id"), studentId,
                                 rows.getString("full_name"), vector.length);
-                        totals.put(caseCode, total);
+                        totals.put(studentId, total);
                     }
                     total.add(vector);
                 }
@@ -53,68 +53,72 @@ public final class FaceSearchDao {
         return List.copyOf(gallery);
     }
 
-    /** Saves the selected file name and the real best score; a rejected result has no record id. */
-    public void logSearch(String fileName, Long matchedRecordId, double bestScore) throws SQLException {
-        String sql = "INSERT INTO match_logs (probe_file, matched_record_id, score) VALUES (?, ?, ?)";
+    public void logSearch(String fileName, Long matchedStudentId, double bestScore) throws SQLException {
+        logSearch(fileName, matchedStudentId, bestScore, "General");
+    }
+
+    /** Saves attendance check-in result to attendance_logs with subject and timestamp. */
+    public void logSearch(String fileName, Long matchedStudentId, double bestScore, String subject) throws SQLException {
+        String status = (matchedStudentId != null && bestScore >= 0.70) ? "PRESENT" : "UNRECOGNIZED";
+        String cleanSubject = (subject != null && !subject.isBlank()) ? subject.trim() : "General";
+        String sql = "INSERT INTO attendance_logs (probe_file, matched_student_id, subject, score, status) VALUES (?, ?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, fileName);
-            if (matchedRecordId == null) {
+            if (matchedStudentId == null) {
                 statement.setNull(2, Types.BIGINT);
             } else {
-                statement.setLong(2, matchedRecordId);
+                statement.setLong(2, matchedStudentId);
             }
-            statement.setDouble(3, bestScore);
+            statement.setString(3, cleanSubject);
+            statement.setDouble(4, bestScore);
+            statement.setString(5, status);
             statement.executeUpdate();
         }
     }
 
-    /** Reads the stored four-byte floats in the same order used by Phase2Demo. */
     private float[] decodeVector(byte[] bytes) throws IOException {
-        if (bytes == null || bytes.length == 0 || bytes.length % Float.BYTES != 0) {
-            throw new IOException("A saved face vector has an invalid size");
+        if (bytes == null || bytes.length == 0 || bytes.length % 4 != 0) {
+            throw new IOException("The database vector BLOB has an invalid size");
         }
-        ByteBuffer input = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
-        float[] vector = new float[bytes.length / Float.BYTES];
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+        float[] vector = new float[bytes.length / 4];
         for (int i = 0; i < vector.length; i++) {
-            vector[i] = input.getFloat();
+            vector[i] = buffer.getFloat();
         }
         return vector;
     }
 
-    /** Holds a running total while several photos for one record are read. */
+    public record GalleryEntry(long recordId, String studentId, String fullName, float[] vector) {
+        public String caseCode() { return studentId; }
+    }
+
     private static final class VectorTotal {
         private final long recordId;
-        private final String caseCode;
-        private final String fullName;
-        private final double[] values;
+        private final String studentId;
+        private final String name;
+        private final double[] sums;
         private int count;
 
-        private VectorTotal(long recordId, String caseCode, String fullName, int size) {
+        VectorTotal(long recordId, String studentId, String name, int size) {
             this.recordId = recordId;
-            this.caseCode = caseCode;
-            this.fullName = fullName;
-            this.values = new double[size];
+            this.studentId = studentId;
+            this.name = name;
+            this.sums = new double[size];
         }
 
-        private void add(float[] vector) throws IOException {
-            if (vector.length != values.length) {
-                throw new IOException("Saved LBP vectors have different sizes");
-            }
-            for (int i = 0; i < vector.length; i++) {
-                values[i] += vector[i];
+        void add(float[] vector) {
+            for (int i = 0; i < sums.length; i++) {
+                sums[i] += vector[i];
             }
             count++;
         }
 
-        private GalleryEntry average() {
-            float[] average = new float[values.length];
-            for (int i = 0; i < values.length; i++) {
-                average[i] = (float) (values[i] / count);
+        GalleryEntry average() {
+            float[] average = new float[sums.length];
+            for (int i = 0; i < sums.length; i++) {
+                average[i] = (float) (sums[i] / count);
             }
-            return new GalleryEntry(recordId, caseCode, fullName, average);
+            return new GalleryEntry(recordId, studentId, name, average);
         }
     }
-
-    /** One database record and its averaged face vector. */
-    public record GalleryEntry(long recordId, String caseCode, String fullName, float[] vector) { }
 }

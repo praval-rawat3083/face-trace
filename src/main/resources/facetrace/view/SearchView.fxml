@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
@@ -15,45 +19,135 @@
             fx:controller="facetrace.controller.SearchController"
             stylesheets="@search.css">
     <top>
-        <HBox spacing="12" styleClass="header">
-            <Label text="FaceTrace - User Search" styleClass="header-title" />
+        <HBox spacing="14" styleClass="header">
+            <VBox spacing="2">
+                <Label text="FaceTrace — Smart Attendance Kiosk" styleClass="header-title" />
+                <Label text="Automated Biometric Check-in &amp; Student Self-Registration with Liveness Anti-Spoofing" styleClass="header-subtitle" />
+            </VBox>
             <Region HBox.hgrow="ALWAYS" />
-            <Button fx:id="adminLoginButton" text="Admin sign-in" onAction="#openAdminLogin" styleClass="secondary-button" />
+            <Button fx:id="adminLoginButton" text="Admin Portal ⚙" onAction="#openAdminLogin" styleClass="secondary-button" />
         </HBox>
     </top>
     <center>
-        <VBox spacing="14" styleClass="page-content">
-            <Label text="Search a permitted photo against the saved demo gallery. Scores are not proof of identity."
-                   styleClass="intro" wrapText="true" />
-            <HBox spacing="10" styleClass="controls">
-                <Button fx:id="choosePhotoButton" text="Choose photo" onAction="#choosePhoto" />
-                <Label fx:id="selectedFileLabel" text="No image selected" styleClass="selected-file" />
-                <Region HBox.hgrow="ALWAYS" />
-                <Label text="Threshold" styleClass="field-label" />
-                <TextField fx:id="thresholdField" text="0.0" prefWidth="80" />
-                <Button fx:id="searchButton" text="Search" onAction="#search" />
-            </HBox>
-            <HBox spacing="16" styleClass="main-content" VBox.vgrow="ALWAYS">
-                <VBox spacing="8" styleClass="content-section" prefWidth="470">
-                    <Label text="Selected photo with detected face boxes" styleClass="section-title" />
-                    <StackPane prefWidth="440" prefHeight="330" styleClass="preview-frame">
-                        <ImageView fx:id="previewImageView" fitWidth="440" fitHeight="330"
-                                   preserveRatio="true" smooth="true" />
-                    </StackPane>
+        <TabPane fx:id="mainTabPane" tabClosingPolicy="UNAVAILABLE" styleClass="main-tab-pane">
+            <!-- TAB 1: ATTENDANCE CHECK-IN -->
+            <Tab text="⚡ Attendance Check-in">
+                <VBox spacing="14" styleClass="page-content">
+                    <!-- CONTROLS CARD: 2 SPACIOUS ROWS (ZERO TEXT CLIPPING) -->
+                    <VBox spacing="12" styleClass="controls-card">
+                        <!-- Row 1: Camera & Photo Source Selection + Mark Attendance Action -->
+                        <HBox spacing="12" alignment="CENTER_LEFT">
+                            <Button fx:id="webcamToggleButton" text="📷 Start Live Webcam" onAction="#toggleWebcam"
+                                    minWidth="-Infinity" styleClass="webcam-button" />
+                            <Button fx:id="choosePhotoButton" text="📁 Select Photo File" onAction="#choosePhoto"
+                                    minWidth="-Infinity" styleClass="primary-button" />
+                            <Label fx:id="selectedFileLabel" text="No source selected"
+                                   minWidth="-Infinity" styleClass="selected-file" />
+
+                            <Region HBox.hgrow="ALWAYS" />
+
+                            <Button fx:id="searchButton" text="✔ Verify &amp; Mark Attendance" onAction="#search"
+                                    minWidth="-Infinity" styleClass="action-button" />
+                        </HBox>
+
+                        <!-- Row 2: Lecture / Subject Selection & Similarity Cutoff -->
+                        <HBox spacing="12" alignment="CENTER_LEFT" styleClass="controls-subbar">
+                            <Label text="Subject / Lecture:" minWidth="-Infinity" styleClass="field-label" />
+                            <ComboBox fx:id="subjectComboBox" prefWidth="320" minWidth="260" styleClass="combo-box" />
+
+                            <Region prefWidth="10" />
+
+                            <Label text="Similarity Cutoff:" minWidth="-Infinity" styleClass="field-label" />
+                            <TextField fx:id="thresholdField" text="0.70" prefWidth="75" minWidth="70"
+                                       promptText="0.70" styleClass="threshold-input" />
+                            <Label text="(Default: 0.70 = 70% confidence threshold)" minWidth="-Infinity" styleClass="field-hint" />
+                        </HBox>
+                    </VBox>
+
+                    <HBox spacing="16" styleClass="main-content" VBox.vgrow="ALWAYS">
+                        <VBox spacing="10" styleClass="content-card" prefWidth="490">
+                            <Label text="Live Camera Feed / Photo Preview" styleClass="section-title" />
+                            <StackPane prefWidth="460" prefHeight="350" styleClass="preview-frame">
+                                <ImageView fx:id="previewImageView" fitWidth="450" fitHeight="340"
+                                           preserveRatio="true" smooth="true" />
+                                <Label text="Click 'Start Live Webcam' for real-time tracking, or select a photo file."
+                                       styleClass="preview-placeholder" wrapText="true" />
+                            </StackPane>
+                        </VBox>
+
+                        <VBox spacing="10" styleClass="content-card" HBox.hgrow="ALWAYS">
+                            <Label text="Biometric Verification Results" styleClass="section-title" />
+                            <TableView fx:id="resultsTable" VBox.vgrow="ALWAYS" styleClass="results-table">
+                                <columns>
+                                    <TableColumn fx:id="nameColumn" text="Student Name" prefWidth="180" sortable="false" />
+                                    <TableColumn fx:id="caseColumn" text="Roll No / Student ID" prefWidth="145" sortable="false" />
+                                    <TableColumn fx:id="scoreColumn" text="Match Confidence" prefWidth="140" sortable="false" />
+                                </columns>
+                            </TableView>
+                            <Label fx:id="statusLabel" text="Ready. Start live webcam or select a photo to begin check-in."
+                                   wrapText="true" styleClass="status-banner" />
+                        </VBox>
+                    </HBox>
                 </VBox>
-                <VBox spacing="8" styleClass="content-section" HBox.hgrow="ALWAYS">
-                    <Label text="Top three matches" styleClass="section-title" />
-                    <TableView fx:id="resultsTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="nameColumn" text="Name" prefWidth="150" sortable="false" />
-                            <TableColumn fx:id="caseColumn" text="Case code" prefWidth="145" sortable="false" />
-                            <TableColumn fx:id="scoreColumn" text="Cosine score" prefWidth="115" sortable="false" />
-                        </columns>
-                    </TableView>
-                    <Label fx:id="statusLabel" text="Choose a local image to begin."
-                           wrapText="true" styleClass="status" />
+            </Tab>
+
+            <!-- TAB 2: STUDENT SELF-REGISTRATION -->
+            <Tab text="➕ Student Self-Registration">
+                <VBox spacing="14" styleClass="page-content">
+                    <HBox spacing="16" styleClass="main-content" VBox.vgrow="ALWAYS">
+                        <VBox spacing="10" prefWidth="400" styleClass="content-card">
+                            <Label text="New Student Registration" styleClass="section-title" />
+                            <Label text="Enter your institutional details and capture your face profile photo."
+                                   styleClass="intro-small" wrapText="true" />
+
+                            <Label text="Student Roll No / ID:" styleClass="field-label" />
+                            <TextField fx:id="regStudentIdField" promptText="e.g. STU-042 or 2026-CSE-15" />
+
+                            <Label text="Full Name:" styleClass="field-label" />
+                            <TextField fx:id="regFullNameField" promptText="e.g. Ananya Verma" />
+
+                            <Label text="Age / Semester:" styleClass="field-label" />
+                            <TextField fx:id="regAgeField" promptText="e.g. 20" />
+
+                            <Label text="Course / Branch:" styleClass="field-label" />
+                            <TextField fx:id="regDeptField" promptText="e.g. BCA - 3rd Semester" text="BCA" />
+
+                            <Label text="Face Photo Enrollment:" styleClass="field-label" />
+                            <VBox spacing="8" styleClass="enroll-camera-box">
+                                <HBox spacing="8">
+                                    <Button fx:id="regWebcamToggleButton" text="📷 Start Camera" onAction="#toggleRegWebcam"
+                                            HBox.hgrow="ALWAYS" maxWidth="Infinity" minWidth="-Infinity" styleClass="webcam-button" />
+                                    <Button fx:id="regSnapButton" text="⚡ Snap Photo" onAction="#snapForRegistration"
+                                            HBox.hgrow="ALWAYS" maxWidth="Infinity" minWidth="-Infinity" styleClass="action-button" />
+                                </HBox>
+                                <Button fx:id="regChoosePhotoButton" text="📁 Or Select Existing Photo File" onAction="#choosePhotoForRegistration"
+                                        maxWidth="Infinity" minWidth="-Infinity" styleClass="secondary-button" />
+                            </VBox>
+                            <Label fx:id="regPhotoStatusLabel" text="Click 'Start Camera' to see live feed, then 'Snap Photo'."
+                                   wrapText="true" styleClass="selected-file" />
+
+                            <CheckBox fx:id="regConsentCheckbox"
+                                      text="I consent to enrolling my facial biometric template for institutional attendance."
+                                      wrapText="true" styleClass="consent-checkbox" />
+
+                            <Button fx:id="registerStudentButton" text="✔ Register &amp; Enroll Profile" onAction="#registerStudent"
+                                    maxWidth="Infinity" styleClass="enroll-submit-button" />
+                            <Label fx:id="regStatusLabel" text="Fill the form and capture face to complete registration."
+                                   wrapText="true" styleClass="status-banner" />
+                        </VBox>
+
+                        <VBox spacing="10" styleClass="content-card" HBox.hgrow="ALWAYS">
+                            <Label text="Face Registration Preview" styleClass="section-title" />
+                            <StackPane prefWidth="480" prefHeight="380" styleClass="preview-frame">
+                                <ImageView fx:id="regPreviewImageView" fitWidth="460" fitHeight="360"
+                                           preserveRatio="true" smooth="true" />
+                                <Label text="Captured registration face photo with detected box will appear here."
+                                       styleClass="preview-placeholder" wrapText="true" />
+                            </StackPane>
+                        </VBox>
+                    </HBox>
                 </VBox>
-            </HBox>
-        </VBox>
+            </Tab>
+        </TabPane>
     </center>
 </BorderPane>

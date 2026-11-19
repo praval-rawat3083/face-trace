@@ -20,7 +20,7 @@ public final class AdminEmbeddingDao {
     /** Writes a computed vector; the image pixels themselves are not stored here. */
     public void insert(long recordId, float[] vector) throws SQLException {
         String sql = "INSERT INTO face_embeddings (record_id, vector, embedder_name) VALUES (?, ?, ?)";
-        ByteBuffer bytes = ByteBuffer.allocate(vector.length * Float.BYTES).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer bytes = ByteBuffer.allocate(vector.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
         for (float value : vector) {
             bytes.putFloat(value);
         }

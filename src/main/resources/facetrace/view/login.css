@@ -1,76 +1,95 @@
+/* ==========================================================================
+   FaceTrace - Modern SaaS Admin Login Stylesheet
+   ========================================================================== */
+
 .root {
-    -fx-font-family: "Segoe UI";
-    -fx-background-color: #f3f4f6;
+    -fx-font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -fx-background-color: #0f172a;
 }
 
 .header {
-    -fx-background-color: #1f2937;
-    -fx-padding: 16px 22px;
+    -fx-background-color: #0b1120;
+    -fx-padding: 16px 28px;
+    -fx-border-color: #1e293b;
+    -fx-border-width: 0 0 1px 0;
 }
 
 .header-title {
-    -fx-text-fill: white;
-    -fx-font-size: 18px;
-    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 20px;
+    -fx-font-weight: 800;
 }
 
 .page-content {
-    -fx-padding: 28px;
+    -fx-background-color: #0f172a;
+    -fx-padding: 40px;
+    -fx-alignment: center;
 }
 
 .login-form {
-    -fx-spacing: 10px;
-    -fx-padding: 22px;
-    -fx-background-color: white;
-    -fx-border-color: #d1d5db;
+    -fx-spacing: 12px;
+    -fx-padding: 32px 36px;
+    -fx-background-color: #1e293b;
+    -fx-background-radius: 14px;
+    -fx-border-color: #334155;
+    -fx-border-radius: 14px;
     -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 24, 0, 0, 8);
 }
 
 .form-title {
-    -fx-text-fill: #1f2937;
-    -fx-font-size: 20px;
-    -fx-font-weight: bold;
-    -fx-padding: 0 0 6px 0;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 22px;
+    -fx-font-weight: 800;
+    -fx-padding: 0 0 4px 0;
 }
 
 .field-label {
-    -fx-text-fill: #374151;
-    -fx-font-weight: bold;
+    -fx-text-fill: #94a3b8;
+    -fx-font-weight: 700;
+    -fx-font-size: 12px;
 }
 
 .text-field,
 .password-field {
-    -fx-background-radius: 0;
-    -fx-border-radius: 0;
-    -fx-border-color: #9ca3af;
-    -fx-padding: 8px;
+    -fx-background-color: #0f172a;
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+    -fx-border-color: #334155;
+    -fx-border-width: 1px;
+    -fx-padding: 10px 14px;
+    -fx-font-size: 13px;
+    -fx-text-fill: #ffffff;
+}
+
+.text-field:focused,
+.password-field:focused {
+    -fx-border-color: #38bdf8;
+    -fx-effect: dropshadow(gaussian, rgba(56, 189, 248, 0.2), 8, 0, 0, 0);
+}
+
+.check-box {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 12px;
 }
 
 .button {
     -fx-background-color: #2563eb;
-    -fx-text-fill: white;
-    -fx-background-radius: 0;
-    -fx-padding: 9px 16px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: 800;
+    -fx-font-size: 14px;
+    -fx-padding: 11px 20px;
+    -fx-background-radius: 8px;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(37, 99, 235, 0.3), 8, 0, 0, 2);
 }
 
 .button:hover {
     -fx-background-color: #1d4ed8;
 }
 
-.check-box {
-    -fx-text-fill: #374151;
-}
-
-.check-box .box {
-    -fx-background-radius: 0;
-    -fx-border-radius: 0;
-}
-
-.check-box:selected .mark {
-    -fx-background-color: #2563eb;
-}
-
 .status {
-    -fx-text-fill: #374151;
-    -fx-padding: 4px 0 0 0;
+    -fx-text-fill: #f87171;
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
 }

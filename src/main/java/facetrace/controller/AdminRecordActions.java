@@ -1,16 +1,26 @@
 package facetrace.controller;
 
-import facetrace.model.CriminalRecord;
+import facetrace.config.DatabaseConnection;
+import facetrace.model.Student;
 import facetrace.service.AdminRecordService;
 import javafx.concurrent.Task;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ChoiceDialog;
 import javafx.stage.FileChooser;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.List;
+import java.util.Optional;
 
-/** Handles the admin form while delegating database work to services and tasks. */
+/** Handles student enrollment actions while delegating database work to services and tasks. */
 final class AdminRecordActions {
     private final AdminController ui;
     private final AdminRecordTableSupport table;
@@ -25,21 +35,19 @@ final class AdminRecordActions {
         tasks = new AdminTaskRunner(ui, table);
     }
 
-    /** Lets the user choose a local photo without copying it into the project. */
     void choosePhoto() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Choose one permitted synthetic demo photo");
+        chooser.setTitle("Choose student enrollment photo");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
                 "Image files", "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.pgm"));
         File selected = chooser.showOpenDialog(ui.choosePhotoButton.getScene().getWindow());
         if (selected != null) {
             selectedPhoto = selected.toPath().toAbsolutePath().normalize();
             ui.photoPathLabel.setText(selected.getName());
-            ui.statusLabel.setText("The photo stays where it is; only its path is saved.");
+            ui.statusLabel.setText("Selected photo: " + selected.getName());
         }
     }
 
-    /** Adds a synthetic subject after detecting one face and measuring its LBP vector. */
     void addRecord() {
         Integer age = readAge();
         if (age == null) return;
@@ -47,25 +55,24 @@ final class AdminRecordActions {
             ui.statusLabel.setText("Choose one photo containing exactly one detectable face.");
             return;
         }
-        String code = ui.caseCodeField.getText();
+        String studentId = ui.caseCodeField.getText();
         String name = ui.fullNameField.getText();
-        String note = ui.offenceTypeField.getText();
+        String department = ui.offenceTypeField.getText();
         boolean confirmed = ui.syntheticConfirmCheckBox.isSelected();
-        Task<CriminalRecord> task = new Task<>() {
+        Task<Student> task = new Task<>() {
             @Override
-            protected CriminalRecord call() throws Exception {
-                return service.add(table.admin(), code, name, age, note, selectedPhoto, confirmed);
+            protected Student call() throws Exception {
+                return service.add(table.admin(), studentId, name, age, department, selectedPhoto, confirmed);
             }
         };
-        tasks.runAction(task, "Record and LBP vector saved; the add action was audited.");
+        tasks.runAction(task, "Student profile and LBP vector saved; enrollment was audited.");
     }
 
-    /** Updates a selected synthetic row but keeps its existing photo and vector. */
     void updateRecord() {
-        CriminalRecord selected = table.selectedRecord();
+        Student selected = table.selectedRecord();
         Integer age = readAge();
         if (selected == null || age == null) return;
-        CriminalRecord changed = new CriminalRecord(selected.getId(), ui.caseCodeField.getText(),
+        Student changed = new Student(selected.getId(), ui.caseCodeField.getText(),
                 ui.fullNameField.getText(), age, ui.offenceTypeField.getText(), selected.getPhotoPath());
         boolean confirmed = ui.syntheticConfirmCheckBox.isSelected();
         Task<Boolean> task = new Task<>() {
@@ -74,18 +81,17 @@ final class AdminRecordActions {
                 return service.update(table.admin(), changed, confirmed);
             }
         };
-        tasks.runAction(task, "Record updated; the edit action was audited.");
+        tasks.runAction(task, "Student profile & branch updated; the edit action was audited.");
     }
 
-    /** Confirms a delete before removing the row and its linked embedding. */
     void deleteRecord() {
-        CriminalRecord selected = table.selectedRecord();
+        Student selected = table.selectedRecord();
         if (selected == null) return;
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Confirm delete");
-        confirm.setHeaderText("Delete synthetic demo record?");
-        confirm.setContentText(selected.getFullName() + " / " + selected.getCaseCode()
-                + " will be removed with its vector. The audit entry will remain.");
+        confirm.setTitle("Confirm Deletion");
+        confirm.setHeaderText("Delete student record?");
+        confirm.setContentText(selected.getFullName() + " (" + selected.getStudentId()
+                + ") will be removed with its face vector. The audit entry will remain.");
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
         long id = selected.getId();
         Task<Boolean> task = new Task<>() {
@@ -94,12 +100,129 @@ final class AdminRecordActions {
                 return service.delete(table.admin(), id);
             }
         };
-        tasks.runAction(task, "Record deleted; the delete action was audited.");
+        tasks.runAction(task, "Student record deleted; the delete action was audited.");
     }
 
-    /** Clears selected values so the form can accept another synthetic record. */
+    /** Lets admin/teachers manually update attendance for an approved student. */
+    void manualAttendanceEntry() {
+        Student selected = table.selectedRecord();
+        if (selected == null) {
+            ui.statusLabel.setText("Please select a student from the table first to update attendance.");
+            Alert info = new Alert(Alert.AlertType.INFORMATION);
+            info.setTitle("Select Student");
+            info.setHeaderText("No Student Selected");
+            info.setContentText("Please select a student from the directory table first, then click 'Manual Attendance Entry'.");
+            info.showAndWait();
+            return;
+        }
+
+        List<String> bcaSubjects = List.of(
+                "Java Programming (BCA-301)",
+                "Data Structures & Algorithms (BCA-302)",
+                "Database Management Systems (BCA-303)",
+                "Web Technologies (BCA-304)",
+                "Computer Networks (BCA-305)",
+                "Operating Systems (BCA-306)",
+                "Software Engineering (BCA-307)",
+                "Python Programming (BCA-308)",
+                "General Attendance"
+        );
+
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(bcaSubjects.get(0), bcaSubjects);
+        dialog.setTitle("Manual Attendance Override");
+        dialog.setHeaderText("Mark Verified Attendance for " + selected.getFullName() + " (" + selected.getStudentId() + ")");
+        dialog.setContentText("Select BCA Subject / Course:");
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            String subject = result.get();
+            try (Connection conn = DatabaseConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(
+                         "INSERT INTO attendance_logs (probe_file, matched_student_id, subject, score, status) " +
+                         "VALUES ('MANUAL_TEACHER_OVERRIDE', ?, ?, 1.0, 'PRESENT')")) {
+                stmt.setLong(1, selected.getId());
+                stmt.setString(2, subject);
+                stmt.executeUpdate();
+
+                ui.statusLabel.setText("✔ Manual attendance marked for " + selected.getFullName() + " in " + subject);
+                ui.refreshAnalytics();
+
+                Alert success = new Alert(Alert.AlertType.INFORMATION);
+                success.setTitle("Attendance Updated");
+                success.setHeaderText("Attendance Marked Successfully");
+                success.setContentText("Marked PRESENT for:\n" + selected.getFullName() +
+                        " (" + selected.getStudentId() + ")\nSubject: " + subject);
+                success.showAndWait();
+            } catch (Exception ex) {
+                ui.statusLabel.setText("Manual update failed: " + ex.getMessage());
+            }
+        }
+    }
+
+    /** Exports all attendance logs into a clean CSV file for Excel / teachers. */
+    void exportAttendanceCsv() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save Attendance CSV Report");
+        chooser.setInitialFileName("bca_attendance_report.csv");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files (*.csv)", "*.csv"));
+        File file = chooser.showSaveDialog(ui.choosePhotoButton.getScene().getWindow());
+        if (file == null) return;
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT a.check_in_time, s.student_id, s.full_name, s.department, a.subject, a.score, a.status " +
+                     "FROM attendance_logs a LEFT JOIN students s ON a.matched_student_id = s.id " +
+                     "ORDER BY a.check_in_time DESC");
+             ResultSet rs = stmt.executeQuery();
+             PrintWriter writer = new PrintWriter(new FileWriter(file, StandardCharsets.UTF_8))) {
+
+            writer.println("Check-in Timestamp,Student ID / Roll No,Student Name,Branch / Department,Subject / Course,Match Confidence (%),Status");
+            int count = 0;
+            while (rs.next()) {
+                String timestamp = rs.getString("check_in_time");
+                String studentId = rs.getString("student_id") != null ? rs.getString("student_id") : "UNKNOWN";
+                String name = rs.getString("full_name") != null ? rs.getString("full_name") : "Unregistered Face";
+                String dept = rs.getString("department") != null ? rs.getString("department") : "BCA";
+                String subject = rs.getString("subject") != null ? rs.getString("subject") : "General";
+                double score = rs.getDouble("score");
+                String status = rs.getString("status");
+
+                writer.printf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%.1f%%\",\"%s\"%n",
+                        timestamp, studentId, name, dept, subject, score * 100, status);
+                count++;
+            }
+            ui.statusLabel.setText("Exported " + count + " attendance logs to: " + file.getName());
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("CSV Export Successful");
+            alert.setHeaderText("BCA Attendance Report Exported");
+            alert.setContentText("Successfully exported " + count + " records to:\n" + file.getAbsolutePath());
+            alert.showAndWait();
+        } catch (Exception ex) {
+            ui.statusLabel.setText("Export failed: " + ex.getMessage());
+        }
+    }
+
+    void selectionCleared() {
+        ui.updateButton.setDisable(true);
+        ui.deleteButton.setDisable(true);
+        ui.addButton.setDisable(false);
+    }
+
+    void showSelected(Student selected) {
+        if (selected == null) return;
+        ui.caseCodeField.setText(selected.getStudentId());
+        ui.fullNameField.setText(selected.getFullName());
+        ui.ageField.setText(selected.getAge() == 0 ? "" : Integer.toString(selected.getAge()));
+        ui.offenceTypeField.setText(selected.getDepartment());
+        ui.photoPathLabel.setText(selected.getPhotoPath());
+        ui.syntheticConfirmCheckBox.setSelected(true);
+        ui.updateButton.setDisable(false);
+        ui.deleteButton.setDisable(false);
+        ui.addButton.setDisable(true);
+        ui.statusLabel.setText("Selected student: " + selected.getFullName() + ". You can edit branch/details and click 'Update Student'.");
+    }
+
     void clearForm() {
-        ui.recordsTable.getSelectionModel().clearSelection();
         selectedPhoto = null;
         ui.caseCodeField.clear();
         ui.fullNameField.clear();
@@ -107,35 +230,28 @@ final class AdminRecordActions {
         ui.offenceTypeField.clear();
         ui.photoPathLabel.setText("No photo selected");
         ui.syntheticConfirmCheckBox.setSelected(false);
-        selectionCleared();
-    }
-
-    /** Copies a table row into the form for editing. */
-    void showSelected(CriminalRecord record) {
-        selectedPhoto = null;
-        ui.caseCodeField.setText(record.getCaseCode());
-        ui.fullNameField.setText(record.getFullName());
-        ui.ageField.setText(Integer.toString(record.getAge()));
-        ui.offenceTypeField.setText(record.getOffenceType());
-        ui.photoPathLabel.setText(table.photoName(record.getPhotoPath()));
-        ui.syntheticConfirmCheckBox.setSelected(false);
-        ui.choosePhotoButton.setDisable(true);
-        ui.updateButton.setDisable(false);
-        ui.deleteButton.setDisable(false);
-    }
-
-    /** Restores the new-record buttons after the table selection is cleared. */
-    void selectionCleared() {
+        ui.recordsTable.getSelectionModel().clearSelection();
         ui.updateButton.setDisable(true);
         ui.deleteButton.setDisable(true);
-        ui.choosePhotoButton.setDisable(false);
+        ui.addButton.setDisable(false);
+        ui.statusLabel.setText("Form cleared. Enter student details to enroll.");
     }
 
     private Integer readAge() {
+        String text = ui.ageField.getText() == null ? "" : ui.ageField.getText().trim();
+        if (text.isEmpty()) {
+            ui.statusLabel.setText("Enter a valid age or semester number.");
+            return null;
+        }
         try {
-            return Integer.parseInt(ui.ageField.getText().trim());
-        } catch (NumberFormatException invalidNumber) {
-            ui.statusLabel.setText("Enter a whole-number synthetic age from 1 to 120.");
+            int age = Integer.parseInt(text);
+            if (age < 1 || age > 120) {
+                ui.statusLabel.setText("Enter a valid number between 1 and 120.");
+                return null;
+            }
+            return age;
+        } catch (NumberFormatException e) {
+            ui.statusLabel.setText("Age/Semester must be a whole number.");
             return null;
         }
     }

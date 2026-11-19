@@ -23,7 +23,7 @@ final class AdminTaskRunner {
             }
             ui.statusLabel.setText(successMessage);
             ui.actions.clearForm();
-            table.refreshRecords(false);
+            table.refreshRecords();
         });
         task.setOnFailed(event -> {
             setBusy(false);

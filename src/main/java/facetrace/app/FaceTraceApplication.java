@@ -9,24 +9,22 @@ import javafx.stage.Stage;
 import java.io.IOException;
 import java.net.URL;
 
-/** Opens the public user-search view; admin sign-in remains available from its header button. */
+/** Opens the Smart Attendance kiosk window; admin portal remains accessible from the header. */
 public final class FaceTraceApplication extends Application {
-    /** Loads the search layout and gives the window a plain, usable starting size. */
     @Override
     public void start(Stage stage) throws IOException {
         URL view = FaceTraceApplication.class.getResource("/facetrace/view/SearchView.fxml");
         if (view == null) {
-            throw new IOException("The user search view is missing from the application resources.");
+            throw new IOException("The attendance view is missing from application resources.");
         }
         Parent root = FXMLLoader.load(view);
-        stage.setTitle("FaceTrace - User Search");
-        stage.setScene(new Scene(root, 1000, 680));
-        stage.setMinWidth(850);
-        stage.setMinHeight(560);
+        stage.setTitle("FaceTrace — Smart Attendance System");
+        stage.setScene(new Scene(root, 1160, 750));
+        stage.setMinWidth(1000);
+        stage.setMinHeight(640);
         stage.show();
     }
 
-    /** Starts JavaFX. */
     public static void main(String[] args) {
         launch(args);
     }

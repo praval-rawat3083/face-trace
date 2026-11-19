@@ -6,9 +6,15 @@ import facetrace.match.FaceMatcher;
 import facetrace.match.MatchResult;
 import facetrace.vision.FaceDetector;
 import facetrace.vision.LbpEmbedder;
+import facetrace.vision.LivenessDetector;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
+import org.opencv.core.MatOfRect;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
@@ -23,74 +29,136 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Runs one search without copying the chosen photo or blocking the JavaFX window. */
+/** Runs attendance biometric verification with anti-spoofing and lecture/subject tracking. */
 public final class FaceSearchService {
     private volatile FaceDetector detector;
 
-    /** Processes the selected photo, ranks real saved vectors, and logs one completed search. */
-    public SearchResponse search(Path imagePath, double threshold) throws IOException, SQLException {
+    /** Verifies a static image from disk against enrolled student vectors. */
+    public SearchResponse search(Path imagePath, double threshold, String subject) throws IOException, SQLException {
         if (imagePath == null || !Files.isRegularFile(imagePath)) {
             return new SearchResponse(null, List.of(),
-                    "The selected file cannot be found. Choose a readable JPEG, PNG, BMP, or PGM photo.");
+                    "The selected photo cannot be found. Choose a readable JPEG, PNG, BMP, or PGM photo.", true);
         }
-        if (!Double.isFinite(threshold) || threshold < 0.0 || threshold > 1.0) {
-            return new SearchResponse(null, List.of(), "Threshold must be a number from 0 to 1.");
-        }
-
-        FaceDetector faceDetector = getDetector();
-        try (FaceDetector.DetectionResult detection = faceDetector.detect(imagePath)) {
-            if (detection.status() == FaceDetector.Status.IMAGE_NOT_READ) {
-                return new SearchResponse(null, List.of(),
-                        "That file could not be read as an image. Choose a readable JPEG, PNG, BMP, or PGM file.");
+        Mat original = Imgcodecs.imread(imagePath.toAbsolutePath().toString());
+        try {
+            if (original.empty()) {
+                return new SearchResponse(null, List.of(), "That file could not be read as an image.", true);
             }
-
-            byte[] preview = toPng(detection.annotatedImage());
-            if (detection.status() == FaceDetector.Status.NO_FACE) {
-                return new SearchResponse(preview, List.of(),
-                        "No face was detected. Choose a clear, front-facing image; no search was logged.");
-            }
-
-            // Step 5 enrolled full grayscale images, so use the same input preparation for fair scores.
-            float[] probe = new LbpEmbedder().embed(readGrayImage(imagePath));
-            try (Connection connection = DatabaseConnection.getConnection()) {
-                FaceSearchDao dao = new FaceSearchDao(connection);
-                List<FaceSearchDao.GalleryEntry> entries = dao.loadGallery();
-                if (entries.isEmpty()) {
-                    return new SearchResponse(preview, List.of(),
-                            "No saved LBP embeddings were found. Enroll the permitted demo gallery first.");
-                }
-
-                Map<String, float[]> vectors = new LinkedHashMap<>();
-                Map<String, FaceSearchDao.GalleryEntry> byCaseCode = new LinkedHashMap<>();
-                for (FaceSearchDao.GalleryEntry entry : entries) {
-                    vectors.put(entry.caseCode(), entry.vector());
-                    byCaseCode.put(entry.caseCode(), entry);
-                }
-
-                List<MatchResult> bestActual = new FaceMatcher(0.0).rankTopK(probe, vectors, 1);
-                List<MatchResult> matches = new FaceMatcher(threshold).rankTopK(probe, vectors, 3);
-                MatchResult best = bestActual.get(0);
-                Long matchedId = matches.isEmpty() ? null : byCaseCode.get(matches.get(0).caseCode()).recordId();
-                dao.logSearch(imagePath.getFileName().toString(), matchedId, best.similarity());
-
-                List<SearchHit> hits = new ArrayList<>();
-                for (MatchResult match : matches) {
-                    FaceSearchDao.GalleryEntry entry = byCaseCode.get(match.caseCode());
-                    hits.add(new SearchHit(entry.fullName(), entry.caseCode(), match.similarity()));
-                }
-                String faceNote = detection.status() == FaceDetector.Status.MULTIPLE_FACES
-                        ? "Detected " + detection.faces().size()
-                        + " faces; comparing the full grayscale photo. Choose one face for a clearer result. " : "";
-                String message = matches.isEmpty()
-                        ? faceNote + String.format(Locale.ROOT,
-                        "No candidate reached the threshold. Highest measured score: %.4f. Search logged.", best.similarity())
-                        : faceNote + "Search finished and logged to match_logs.";
-                return new SearchResponse(preview, hits, message);
-            }
+            return searchMat(original, threshold, imagePath.getFileName().toString(), subject);
+        } finally {
+            original.release();
         }
     }
 
-    /** Loads OpenCV and the cascade once, on the first background search. */
+    public SearchResponse search(Path imagePath, double threshold) throws IOException, SQLException {
+        return search(imagePath, threshold, "General");
+    }
+
+    public SearchResponse searchMat(Mat frame, double threshold, String sourceLabel) throws IOException, SQLException {
+        return searchMat(frame, threshold, sourceLabel, "General");
+    }
+
+    /** Verifies an in-memory camera frame (or static image) against enrolled student vectors. */
+    public SearchResponse searchMat(Mat frame, double threshold, String sourceLabel, String subject) throws IOException, SQLException {
+        if (frame == null || frame.empty()) {
+            return new SearchResponse(null, List.of(), "No camera frame or image provided.", true);
+        }
+        if (!Double.isFinite(threshold) || threshold < 0.0 || threshold > 1.0) {
+            return new SearchResponse(null, List.of(), "Threshold must be a valid confidence number from 0 to 1.", true);
+        }
+
+        FaceDetector faceDetector = getDetector();
+        Mat gray = new Mat();
+        Mat equalized = new Mat();
+        Mat annotated = frame.clone();
+        try {
+            Imgproc.cvtColor(frame, gray, Imgproc.COLOR_BGR2GRAY);
+            Imgproc.equalizeHist(gray, equalized);
+
+            MatOfRect found = new MatOfRect();
+            try {
+                faceDetector.getClassifier().detectMultiScale(equalized, found, 1.15, 4, 0, new Size(30, 30), new Size());
+                Rect[] rects = found.toArray();
+                if (rects.length == 0) {
+                    byte[] preview = toPng(annotated);
+                    return new SearchResponse(preview, List.of(),
+                            "No face detected in frame. Ensure good lighting and look straight into the camera.", true);
+                }
+
+                // Liveness / Anti-spoofing check on the primary face
+                Rect primaryFace = rects[0];
+                for (Rect r : rects) {
+                    if (r.width * r.height > primaryFace.width * primaryFace.height) {
+                        primaryFace = r;
+                    }
+                }
+
+                Mat faceCrop = equalized.submat(primaryFace);
+                LivenessDetector.LivenessResult liveness = LivenessDetector.checkLiveness(faceCrop);
+                faceCrop.release();
+
+                Scalar boxColor = liveness.isLive() ? new Scalar(16, 185, 129) : new Scalar(239, 68, 68); // green or red
+                for (Rect r : rects) {
+                    Imgproc.rectangle(annotated, r, boxColor, 3);
+                }
+
+                byte[] preview = toPng(annotated);
+                BufferedImage grayImage = matToBufferedImage(gray);
+                float[] probe = new LbpEmbedder().embed(grayImage);
+
+                try (Connection connection = DatabaseConnection.getConnection()) {
+                    FaceSearchDao dao = new FaceSearchDao(connection);
+                    List<FaceSearchDao.GalleryEntry> entries = dao.loadGallery();
+                    if (entries.isEmpty()) {
+                        return new SearchResponse(preview, List.of(),
+                                "No enrolled students found. Enroll students via 'Student Registration' first.", liveness.isLive());
+                    }
+
+                    Map<String, float[]> vectors = new LinkedHashMap<>();
+                    Map<String, FaceSearchDao.GalleryEntry> byId = new LinkedHashMap<>();
+                    for (FaceSearchDao.GalleryEntry entry : entries) {
+                        vectors.put(entry.studentId(), entry.vector());
+                        byId.put(entry.studentId(), entry);
+                    }
+
+                    List<MatchResult> bestActual = new FaceMatcher(0.0).rankTopK(probe, vectors, 1);
+                    List<MatchResult> matches = new FaceMatcher(threshold).rankTopK(probe, vectors, 3);
+                    MatchResult best = bestActual.get(0);
+                    Long matchedId = matches.isEmpty() ? null : byId.get(matches.get(0).caseCode()).recordId();
+
+                    dao.logSearch(sourceLabel != null ? sourceLabel : "LIVE_CAPTURE", matchedId, best.similarity(), subject);
+
+                    List<SearchHit> hits = new ArrayList<>();
+                    for (MatchResult match : matches) {
+                        FaceSearchDao.GalleryEntry entry = byId.get(match.caseCode());
+                        hits.add(new SearchHit(entry.fullName(), entry.studentId(), match.similarity()));
+                    }
+
+                    String livenessNote = liveness.isLive() ? " [Live Face Verified]" : " [" + liveness.message() + "]";
+                    String message;
+                    if (!matches.isEmpty()) {
+                        SearchHit top = hits.get(0);
+                        message = String.format(Locale.ROOT,
+                                "✔ Verified & Marked Present: %s (%s) — %s | Match: %.1f%%%s",
+                                top.name(), top.caseCode(), subject, top.score() * 100, livenessNote);
+                    } else {
+                        message = String.format(Locale.ROOT,
+                                "✖ Unrecognized Face (Best match: %.1f%%, below %.0f%% cutoff). Attendance not marked.%s",
+                                best.similarity() * 100, threshold * 100, livenessNote);
+                    }
+
+                    return new SearchResponse(preview, hits, message, liveness.isLive());
+                }
+            } finally {
+                found.release();
+            }
+        } finally {
+            gray.release();
+            equalized.release();
+            annotated.release();
+        }
+    }
+
     private FaceDetector getDetector() throws IOException {
         if (detector == null) {
             synchronized (this) {
@@ -102,29 +170,16 @@ public final class FaceSearchService {
         return detector;
     }
 
-    /** Reads the full photo in grayscale to match the existing Phase2Demo gallery vectors. */
-    private BufferedImage readGrayImage(Path imagePath) throws IOException {
-        Mat gray = Imgcodecs.imread(imagePath.toAbsolutePath().toString(), Imgcodecs.IMREAD_GRAYSCALE);
-        try {
-            long pixelCount = gray.total();
-            if (gray.empty() || gray.channels() != 1 || gray.cols() < 3 || gray.rows() < 3
-                    || pixelCount > Integer.MAX_VALUE) {
-                throw new IOException("The selected photo is too small or too large to process");
-            }
-            byte[] pixels = new byte[(int) pixelCount];
-            if (gray.get(0, 0, pixels) != pixels.length) {
-                throw new IOException("Could not read all pixels from the selected photo");
-            }
-            BufferedImage image = new BufferedImage(gray.cols(), gray.rows(), BufferedImage.TYPE_BYTE_GRAY);
-            byte[] target = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-            System.arraycopy(pixels, 0, target, 0, pixels.length);
-            return image;
-        } finally {
-            gray.release();
-        }
+    private BufferedImage matToBufferedImage(Mat gray) {
+        long pixelCount = gray.total();
+        byte[] pixels = new byte[(int) pixelCount];
+        gray.get(0, 0, pixels);
+        BufferedImage image = new BufferedImage(gray.cols(), gray.rows(), BufferedImage.TYPE_BYTE_GRAY);
+        byte[] target = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+        System.arraycopy(pixels, 0, target, 0, pixels.length);
+        return image;
     }
 
-    /** Encodes the boxed preview in memory so the original photo is never overwritten or copied. */
     private byte[] toPng(Mat annotatedImage) throws IOException {
         MatOfByte encoded = new MatOfByte();
         try {
@@ -137,11 +192,12 @@ public final class FaceSearchService {
         }
     }
 
-    /** Search-row values shown in the results table. */
-    public record SearchHit(String name, String caseCode, double score) { }
+    public record SearchHit(String name, String caseCode, double score) {
+        public String studentId() { return caseCode; }
+        public String percentage() { return String.format(Locale.ROOT, "%.1f%%", score * 100); }
+    }
 
-    /** Search results plus an in-memory copy of the detector preview and a plain status message. */
-    public record SearchResponse(byte[] previewPng, List<SearchHit> hits, String message) {
+    public record SearchResponse(byte[] previewPng, List<SearchHit> hits, String message, boolean isLive) {
         public SearchResponse {
             hits = List.copyOf(hits);
         }
